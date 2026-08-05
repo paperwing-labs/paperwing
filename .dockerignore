@@ -1,7 +1,9 @@
 .git
 .env
 data
-paperwing
+/paperwing
+!cmd/paperwing/
+!cmd/paperwing/**
 *.db
 *.db-shm
 *.db-wal

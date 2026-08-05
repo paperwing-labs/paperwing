@@ -1,6 +1,6 @@
 /data/
 /.env
-paperwing
+/paperwing
 *.db
 *.db-shm
 *.db-wal
