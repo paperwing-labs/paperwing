@@ -1,0 +1,364 @@
+openapi: 3.1.0
+info:
+  title: Paperwing API
+  version: 0.1.0
+  description: Unified read-only API for multiple IMAP inboxes.
+servers:
+  - url: http://127.0.0.1:8080
+security:
+  - cookieAuth: []
+paths:
+  /healthz:
+    get:
+      security: []
+      operationId: health
+      summary: Check whether the service is running
+      responses:
+        "200":
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, const: ok}
+                required: [status]
+  /auth/status:
+    get:
+      security: []
+      operationId: authStatus
+      summary: Check whether authentication is configured and the current session is valid
+      responses:
+        "200":
+          description: Current authentication state
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuthStatus"}
+  /auth/setup:
+    post:
+      security: []
+      operationId: setupAuth
+      summary: Create the first and only administrator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AuthInput"}
+      responses:
+        "201":
+          description: Administrator created and session cookie set
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuthStatus"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "409":
+          description: Authentication is already configured
+  /auth/login:
+    post:
+      security: []
+      operationId: login
+      summary: Start an authenticated administrator session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AuthInput"}
+      responses:
+        "200":
+          description: Login successful and session cookie set
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuthStatus"}
+        "401":
+          description: Invalid username or password
+        "429":
+          description: Too many failed login attempts
+  /auth/logout:
+    post:
+      security: []
+      operationId: logout
+      summary: End the current administrator session
+      responses:
+        "200":
+          description: Session deleted and cookie cleared
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Success"}
+  /accounts/test:
+    post:
+      operationId: testAccount
+      summary: Test an IMAP connection without saving it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NewAccount"}
+      responses:
+        "200":
+          description: Login, INBOX selection, and IDLE capability succeeded
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Success"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "502": {$ref: "#/components/responses/BadGateway"}
+  /accounts:
+    post:
+      operationId: createAccount
+      summary: Test, save, initially synchronize, and monitor an IMAP account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NewAccount"}
+      responses:
+        "201":
+          description: Account saved; synchronization starts asynchronously
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Account"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "502": {$ref: "#/components/responses/BadGateway"}
+    get:
+      operationId: listAccounts
+      summary: List configured IMAP accounts and monitoring states
+      responses:
+        "200":
+          description: Configured accounts and their monitoring state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/Account"}
+                required: [items]
+  /accounts/{id}:
+    delete:
+      operationId: deleteAccount
+      summary: Delete an account and its persisted mail
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "204": {description: "Account, messages, and attachments deleted"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /accounts/{id}/sync:
+    post:
+      operationId: syncAccount
+      summary: Request an immediate catch-up synchronization
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Synchronization completed
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Success"}
+        "409":
+          description: Monitor is reconnecting or unavailable
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+  /emails:
+    get:
+      operationId: listEmails
+      summary: List persisted emails from all or one account
+      parameters:
+        - name: account_id
+          in: query
+          schema: {type: string}
+        - name: page
+          in: query
+          schema: {type: integer, minimum: 1, default: 1}
+        - name: page_size
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+      responses:
+        "200":
+          description: Emails ordered by received time, newest first
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/EmailPage"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+  /emails/{id}:
+    get:
+      operationId: getEmail
+      summary: Read one persisted email
+      parameters:
+        - $ref: "#/components/parameters/EmailId"
+      responses:
+        "200":
+          description: Parsed email, bodies, headers, and attachment metadata
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Email"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /emails/{id}/attachments/{attachmentId}:
+    get:
+      operationId: downloadAttachment
+      summary: Stream one persisted attachment
+      parameters:
+        - $ref: "#/components/parameters/EmailId"
+        - name: attachmentId
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "200":
+          description: Attachment bytes
+          headers:
+            Content-Disposition:
+              schema: {type: string}
+          content:
+            application/octet-stream:
+              schema: {type: string, format: binary}
+        "404": {$ref: "#/components/responses/NotFound"}
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: paperwing_session
+  parameters:
+    AccountId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string}
+    EmailId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string}
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    BadGateway:
+      description: IMAP connection, login, or capability test failed
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+  schemas:
+    AuthInput:
+      type: object
+      properties:
+        username: {type: string, minLength: 1, maxLength: 64}
+        password: {type: string, format: password, minLength: 12}
+      required: [username, password]
+      additionalProperties: false
+    AuthStatus:
+      type: object
+      properties:
+        configured: {type: boolean}
+        authenticated: {type: boolean}
+        username: {type: string}
+      required: [configured, authenticated, username]
+    NewAccount:
+      type: object
+      properties:
+        name: {type: string, examples: [Personal Gmail]}
+        host: {type: string, examples: [imap.gmail.com]}
+        port: {type: integer, minimum: 1, maximum: 65535, default: 993}
+        tls:
+          type: boolean
+          description: Use implicit TLS. False uses an unencrypted connection.
+          default: true
+        username: {type: string, examples: [me@example.com]}
+        password: {type: string, format: password}
+      required: [name, host, tls, username, password]
+      additionalProperties: false
+    Account:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+        host: {type: string}
+        port: {type: integer}
+        tls: {type: boolean}
+        username: {type: string}
+        monitor_status:
+          type: string
+          enum: [starting, connecting, syncing, idle, reconnecting]
+        latest_connection_error: {type: string}
+        last_successful_sync_at: {type: string, format: date-time}
+        created_at: {type: string, format: date-time}
+      required: [id, name, host, port, tls, username, monitor_status, created_at]
+    EmailSummary:
+      type: object
+      properties:
+        id: {type: string}
+        account_id: {type: string}
+        message_id: {type: string}
+        subject: {type: string}
+        from: {type: array, items: {type: string}}
+        to: {type: array, items: {type: string}}
+        sent_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        size: {type: integer, format: int64}
+        attachment_count: {type: integer}
+      required: [id, account_id, subject, from, to, received_at, size, attachment_count]
+    EmailPage:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: "#/components/schemas/EmailSummary"}}
+        page: {type: integer}
+        page_size: {type: integer}
+        total: {type: integer}
+      required: [items, page, page_size, total]
+    Email:
+      type: object
+      properties:
+        id: {type: string}
+        account_id: {type: string}
+        message_id: {type: string}
+        subject: {type: string}
+        from: {type: array, items: {type: string}}
+        to: {type: array, items: {type: string}}
+        cc: {type: array, items: {type: string}}
+        headers:
+          type: object
+          additionalProperties:
+            type: array
+            items: {type: string}
+        text_body: {type: string}
+        html_body: {type: string}
+        sent_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        size: {type: integer, format: int64}
+        attachments:
+          type: array
+          items: {$ref: "#/components/schemas/Attachment"}
+        created_at: {type: string, format: date-time}
+      required: [id, account_id, subject, from, to, cc, headers, text_body, html_body, received_at, size, attachments, created_at]
+    Attachment:
+      type: object
+      properties:
+        id: {type: string}
+        email_id: {type: string}
+        filename: {type: string}
+        content_type: {type: string}
+        content_id: {type: string}
+        size: {type: integer, format: int64}
+      required: [id, filename, content_type, size]
+    Success:
+      type: object
+      properties:
+        ok: {type: boolean, const: true}
+      required: [ok]
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message: {type: string}
+          required: [message]
+      required: [error]

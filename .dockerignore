@@ -1,0 +1,9 @@
+.git
+.env
+data
+paperwing
+*.db
+*.db-shm
+*.db-wal
+frontend/node_modules
+internal/web/dist

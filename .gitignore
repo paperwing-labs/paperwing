@@ -1,0 +1,11 @@
+/data/
+/.env
+paperwing
+*.db
+*.db-shm
+*.db-wal
+frontend/node_modules/
+frontend/.vite/
+frontend/*.tsbuildinfo
+
+*.cookies
