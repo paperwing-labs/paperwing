@@ -1,18 +1,20 @@
 # syntax=docker/dockerfile:1
-FROM node:22-alpine AS web-build
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web-build
 WORKDIR /src/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend ./
 RUN npm run build
 
-FROM golang:1.23-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS build
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web-build /src/internal/web/dist ./internal/web/dist
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/paperwing ./cmd/paperwing && \
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/paperwing ./cmd/paperwing && \
     mkdir -p /out/data
 
 FROM gcr.io/distroless/static-debian12:nonroot
