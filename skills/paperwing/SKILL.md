@@ -18,10 +18,12 @@ Use the Paperwing HTTP API as a personal mail assistant. Keep the interaction li
 
 ## Connect and authenticate
 
-1. Obtain the instance base URL from `PAPERWING_URL` or the host's configured connection. Remove a trailing slash. Ask for the URL when it is unavailable; do not guess a remote address.
-2. Obtain the API token from `PAPERWING_API_TOKEN` or the host's secret store. If it is unavailable, ask the user to create one from the key icon in the Paperwing web app and save it through secure input. Never ask the user to paste it into ordinary chat.
-3. Call `GET /healthz`. Expect `200` with `{"status":"ok"}`.
-4. Send the token on every account and email request:
+1. Use `PAPERWING_URL` and `PAPERWING_API_TOKEN` from the process environment when both are available.
+2. For any missing value, read `${PAPERWING_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/paperwing/config.env}` without printing its contents. Environment values take precedence over saved values.
+3. If the file is absent or incomplete, run `python3 <skill-directory>/scripts/configure.py` in an interactive terminal. Let the script ask for the URL and token, then save them with user-only permissions. If the user has not created a token, direct them to the key icon in the Paperwing web app first. Never ask the user to paste a token into ordinary chat.
+4. Remove a trailing slash from the configured base URL. Do not guess a remote address.
+5. Call `GET /healthz`. Expect `200` with `{"status":"ok"}`.
+6. Send the token on every account and email request:
 
    ```text
    Authorization: Bearer <PAPERWING_API_TOKEN>
@@ -90,7 +92,6 @@ Call `GET /emails/{id}` for the selected summary. Prefer `text_body`. If only `h
 - `401`: report that the API token is missing, invalid, or expired; do not retry it repeatedly.
 - `403`: report the required scope and stop the operation.
 - `409`: report that synchronization is temporarily unavailable.
-- `429`: stop login attempts and report the retry delay.
 - `502`: report the IMAP connection, login, or capability error and suggest checking provider settings or an app password.
 - `5xx`: report a Paperwing service failure. Do not retry state-changing requests without checking whether they already succeeded.
 
