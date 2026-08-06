@@ -52,6 +52,7 @@ func New(api http.Handler) http.Handler {
 func isAPIPath(value string) bool {
 	return value == "/healthz" ||
 		value == "/auth" || strings.HasPrefix(value, "/auth/") ||
+		value == "/api-tokens" || strings.HasPrefix(value, "/api-tokens/") ||
 		value == "/accounts" || strings.HasPrefix(value, "/accounts/") ||
 		value == "/emails" || strings.HasPrefix(value, "/emails/")
 }

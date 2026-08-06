@@ -98,7 +98,7 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-func (a *API) requireAuthentication(next http.Handler) http.Handler {
+func (a *API) requireSession(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		valid, err := a.auth.Authenticate(r.Context(), sessionToken(r))
 		if err != nil {
@@ -111,6 +111,54 @@ func (a *API) requireAuthentication(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (a *API) requireScope(scope string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if authorization := strings.TrimSpace(r.Header.Get("Authorization")); authorization != "" {
+			token, ok := bearerToken(authorization)
+			if !ok {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				writeError(w, http.StatusUnauthorized, "invalid bearer authorization")
+				return
+			}
+			access, valid, err := a.auth.AuthenticateAPIToken(r.Context(), token)
+			if err != nil {
+				a.internalError(w, err)
+				return
+			}
+			if !valid {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				writeError(w, http.StatusUnauthorized, "invalid or expired API token")
+				return
+			}
+			if !access.Allows(scope) {
+				writeError(w, http.StatusForbidden, "API token does not grant "+scope)
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		valid, err := a.auth.Authenticate(r.Context(), sessionToken(r))
+		if err != nil {
+			a.internalError(w, err)
+			return
+		}
+		if !valid {
+			writeError(w, http.StatusUnauthorized, "authentication required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func bearerToken(authorization string) (string, bool) {
+	parts := strings.Fields(authorization)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return "", false
+	}
+	return parts[1], true
 }
 
 func sessionToken(r *http.Request) string {

@@ -62,6 +62,11 @@ type Repository interface {
 	AuthSessionValid(context.Context, []byte, time.Time) (bool, error)
 	DeleteAuthSession(context.Context, []byte) error
 	DeleteExpiredAuthSessions(context.Context, time.Time) error
+	SaveAPIToken(context.Context, APITokenRecord) error
+	APITokens(context.Context) ([]APIToken, error)
+	APITokenByHash(context.Context, []byte, time.Time) (APIToken, error)
+	TouchAPIToken(context.Context, string, time.Time) error
+	DeleteAPIToken(context.Context, string) error
 }
 
 type Service struct {

@@ -7,6 +7,7 @@ servers:
   - url: http://127.0.0.1:8080
 security:
   - cookieAuth: []
+  - bearerAuth: []
 paths:
   /healthz:
     get:
@@ -84,10 +85,66 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Success"}
+  /api-tokens:
+    get:
+      security:
+        - cookieAuth: []
+      operationId: listApiTokens
+      summary: List API tokens
+      description: Requires an authenticated browser session. Full token values are never returned.
+      responses:
+        "200":
+          description: API tokens ordered by creation time, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/APIToken"}
+                required: [items]
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    post:
+      security:
+        - cookieAuth: []
+      operationId: createApiToken
+      summary: Create an API token
+      description: Requires an authenticated browser session. The full token is returned only once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NewAPIToken"}
+      responses:
+        "201":
+          description: API token created
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/IssuedAPIToken"}
+        "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+  /api-tokens/{id}:
+    delete:
+      security:
+        - cookieAuth: []
+      operationId: revokeApiToken
+      summary: Revoke an API token
+      description: Requires an authenticated browser session. Revocation takes effect immediately.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        "204": {description: API token revoked}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
   /accounts/test:
     post:
       operationId: testAccount
       summary: Test an IMAP connection without saving it
+      description: Bearer tokens require the `accounts:write` scope.
       requestBody:
         required: true
         content:
@@ -100,11 +157,14 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Success"}
         "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
         "502": {$ref: "#/components/responses/BadGateway"}
   /accounts:
     post:
       operationId: createAccount
       summary: Test, save, initially synchronize, and monitor an IMAP account
+      description: Bearer tokens require the `accounts:write` scope.
       requestBody:
         required: true
         content:
@@ -117,10 +177,13 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Account"}
         "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
         "502": {$ref: "#/components/responses/BadGateway"}
     get:
       operationId: listAccounts
       summary: List configured IMAP accounts and monitoring states
+      description: Bearer tokens require the `accounts:read` scope.
       responses:
         "200":
           description: Configured accounts and their monitoring state
@@ -133,19 +196,26 @@ paths:
                     type: array
                     items: {$ref: "#/components/schemas/Account"}
                 required: [items]
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /accounts/{id}:
     delete:
+      security:
+        - cookieAuth: []
       operationId: deleteAccount
       summary: Delete an account and its persisted mail
+      description: Requires an authenticated browser session. API tokens cannot delete accounts.
       parameters:
         - $ref: "#/components/parameters/AccountId"
       responses:
         "204": {description: "Account, messages, and attachments deleted"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
   /accounts/{id}/sync:
     post:
       operationId: syncAccount
       summary: Request an immediate catch-up synchronization
+      description: Bearer tokens require the `sync:write` scope.
       parameters:
         - $ref: "#/components/parameters/AccountId"
       responses:
@@ -159,10 +229,13 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Error"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /emails:
     get:
       operationId: listEmails
       summary: List persisted emails from all or one account
+      description: Bearer tokens require the `mail:read` scope.
       parameters:
         - name: account_id
           in: query
@@ -180,10 +253,13 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/EmailPage"}
         "400": {$ref: "#/components/responses/BadRequest"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /emails/{id}:
     get:
       operationId: getEmail
       summary: Read one persisted email
+      description: Bearer tokens require the `mail:read` scope.
       parameters:
         - $ref: "#/components/parameters/EmailId"
       responses:
@@ -193,10 +269,13 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Email"}
         "404": {$ref: "#/components/responses/NotFound"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
   /emails/{id}/attachments/{attachmentId}:
     get:
       operationId: downloadAttachment
       summary: Stream one persisted attachment
+      description: Bearer tokens require the `mail:read` scope.
       parameters:
         - $ref: "#/components/parameters/EmailId"
         - name: attachmentId
@@ -213,12 +292,18 @@ paths:
             application/octet-stream:
               schema: {type: string, format: binary}
         "404": {$ref: "#/components/responses/NotFound"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
 components:
   securitySchemes:
     cookieAuth:
       type: apiKey
       in: cookie
       name: paperwing_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Paperwing API token
   parameters:
     AccountId:
       name: id
@@ -246,6 +331,16 @@ components:
       content:
         application/json:
           schema: {$ref: "#/components/schemas/Error"}
+    Unauthorized:
+      description: Authentication is missing, invalid, or expired
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Forbidden:
+      description: The API token does not grant the required scope
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
   schemas:
     AuthInput:
       type: object
@@ -261,6 +356,49 @@ components:
         authenticated: {type: boolean}
         username: {type: string}
       required: [configured, authenticated, username]
+    APITokenScope:
+      type: string
+      enum: [mail:read, accounts:read, accounts:write, sync:write]
+    NewAPIToken:
+      type: object
+      properties:
+        name: {type: string, minLength: 1, maxLength: 64, examples: [Personal assistant]}
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: "#/components/schemas/APITokenScope"}
+        expires_in_days:
+          type: integer
+          minimum: 0
+          maximum: 3650
+          default: 365
+          description: Set to 0 for a token that does not expire.
+      required: [name, scopes]
+      additionalProperties: false
+    APIToken:
+      type: object
+      properties:
+        id: {type: string}
+        name: {type: string}
+        token_prefix: {type: string, examples: [pw_abcd1234]}
+        scopes:
+          type: array
+          items: {$ref: "#/components/schemas/APITokenScope"}
+        created_at: {type: string, format: date-time}
+        last_used_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+      required: [id, name, token_prefix, scopes, created_at]
+    IssuedAPIToken:
+      allOf:
+        - $ref: "#/components/schemas/APIToken"
+        - type: object
+          properties:
+            token:
+              type: string
+              description: Full bearer token. This value is returned only once.
+              examples: [pw_example]
+          required: [token]
     NewAccount:
       type: object
       properties:

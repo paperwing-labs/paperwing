@@ -1,5 +1,6 @@
 import {
   Inbox,
+  KeyRound,
   LogOut,
   Mail,
   Plus,
@@ -20,6 +21,7 @@ interface SidebarProps {
   onSelectAccount: (id: string | null) => void;
   onAddAccount: () => void;
   onManageAccounts: () => void;
+  onManageTokens: () => void;
   onRefresh: () => void;
   onLogout: () => void;
   onClose: () => void;
@@ -34,6 +36,7 @@ export function Sidebar({
   onSelectAccount,
   onAddAccount,
   onManageAccounts,
+  onManageTokens,
   onRefresh,
   onLogout,
   onClose,
@@ -149,6 +152,15 @@ export function Sidebar({
         >
           <Settings2 className="size-[17px]" />
           邮箱设置
+        </button>
+        <button
+          type="button"
+          onClick={onManageTokens}
+          className="focus-ring flex size-10 shrink-0 items-center justify-center rounded-xl text-white/36 transition hover:bg-white/6 hover:text-white"
+          aria-label="API Token"
+          title="API Token"
+        >
+          <KeyRound className="size-[16px]" />
         </button>
         <button
           type="button"

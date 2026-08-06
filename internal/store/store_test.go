@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,44 @@ import (
 	"github.com/paperwing/paperwing/internal/domain"
 	"github.com/paperwing/paperwing/internal/secure"
 )
+
+func TestOpenMigratesAPITokenExpirationMode(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "paperwing.db")
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`CREATE TABLE api_tokens (
+id TEXT PRIMARY KEY,
+name TEXT NOT NULL,
+token_prefix TEXT NOT NULL,
+token_hash BLOB NOT NULL UNIQUE,
+scopes_json TEXT NOT NULL,
+created_at TEXT NOT NULL,
+last_used_at TEXT,
+expires_at TEXT NOT NULL
+)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	cipher, err := secure.New(bytes.Repeat([]byte{7}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(path, cipher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if _, err := store.db.Exec(`INSERT INTO api_tokens(
+id,name,token_prefix,token_hash,scopes_json,created_at,expires_at,never_expires)
+VALUES('tok_legacy','Legacy','pw_legacy',X'01','["mail:read"]','2026-01-01T00:00:00Z','2027-01-01T00:00:00Z',0)`); err != nil {
+		t.Fatalf("new expiration mode column was not added: %v", err)
+	}
+}
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
@@ -53,6 +92,50 @@ func TestStoreAuthentication(t *testing.T) {
 	}
 	if err := store.SetupAuth(ctx, user, session); !errors.Is(err, auth.ErrAlreadyConfigured) {
 		t.Fatalf("duplicate setup error=%v", err)
+	}
+
+	tokenExpiresAt := now.Add(24 * time.Hour)
+	token := auth.APITokenRecord{
+		APIToken: auth.APIToken{ID: "tok_1", Name: "Assistant", TokenPrefix: "pw_example",
+			Scopes: []string{auth.ScopeAccountsRead, auth.ScopeMailRead}, CreatedAt: now,
+			ExpiresAt: &tokenExpiresAt},
+		TokenHash: []byte("api-token-hash"),
+	}
+	if err := store.SaveAPIToken(ctx, token); err != nil {
+		t.Fatal(err)
+	}
+	gotToken, err := store.APITokenByHash(ctx, token.TokenHash, now)
+	if err != nil || gotToken.ID != token.ID || len(gotToken.Scopes) != 2 {
+		t.Fatalf("token=%#v err=%v", gotToken, err)
+	}
+	usedAt := now.Add(time.Minute)
+	if err := store.TouchAPIToken(ctx, token.ID, usedAt); err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := store.APITokens(ctx)
+	if err != nil || len(tokens) != 1 || tokens[0].LastUsedAt == nil || !tokens[0].LastUsedAt.Equal(usedAt) {
+		t.Fatalf("tokens=%#v err=%v", tokens, err)
+	}
+	if _, err := store.APITokenByHash(ctx, token.TokenHash, *token.ExpiresAt); !errors.Is(err, auth.ErrInvalidAPIToken) {
+		t.Fatalf("expired token error=%v", err)
+	}
+	longLived := auth.APITokenRecord{
+		APIToken: auth.APIToken{ID: "tok_2", Name: "Long lived", TokenPrefix: "pw_forever",
+			Scopes: []string{auth.ScopeMailRead}, CreatedAt: now},
+		TokenHash: []byte("long-lived-token-hash"),
+	}
+	if err := store.SaveAPIToken(ctx, longLived); err != nil {
+		t.Fatal(err)
+	}
+	gotLongLived, err := store.APITokenByHash(ctx, longLived.TokenHash, now.Add(20*365*24*time.Hour))
+	if err != nil || gotLongLived.ExpiresAt != nil {
+		t.Fatalf("long-lived token=%#v err=%v", gotLongLived, err)
+	}
+	if err := store.DeleteAPIToken(ctx, token.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.DeleteAPIToken(ctx, token.ID); !errors.Is(err, auth.ErrAPITokenNotFound) {
+		t.Fatalf("missing token error=%v", err)
 	}
 }
 

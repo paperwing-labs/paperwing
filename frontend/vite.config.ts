@@ -9,6 +9,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/accounts": "http://127.0.0.1:8080",
+      "/api-tokens": "http://127.0.0.1:8080",
       "/emails": "http://127.0.0.1:8080",
       "/healthz": "http://127.0.0.1:8080",
     },

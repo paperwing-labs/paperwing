@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { AccountDialog } from "./components/AccountDialog";
 import { AccountManager } from "./components/AccountManager";
+import { APITokenManager } from "./components/APITokenManager";
 import { EmailReader } from "./components/EmailReader";
 import { MessageList } from "./components/MessageList";
 import { Sidebar } from "./components/Sidebar";
@@ -26,6 +27,7 @@ export default function App({ onLogout }: { onLogout: () => Promise<void> }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [accountManagerOpen, setAccountManagerOpen] = useState(false);
+  const [tokenManagerOpen, setTokenManagerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const emailRequestID = useRef(0);
@@ -161,6 +163,7 @@ export default function App({ onLogout }: { onLogout: () => Promise<void> }) {
   const openAddAccount = () => {
     setSidebarOpen(false);
     setAccountManagerOpen(false);
+    setTokenManagerOpen(false);
     setAccountDialogOpen(true);
   };
 
@@ -180,7 +183,13 @@ export default function App({ onLogout }: { onLogout: () => Promise<void> }) {
         onAddAccount={openAddAccount}
         onManageAccounts={() => {
           setSidebarOpen(false);
+          setTokenManagerOpen(false);
           setAccountManagerOpen(true);
+        }}
+        onManageTokens={() => {
+          setSidebarOpen(false);
+          setAccountManagerOpen(false);
+          setTokenManagerOpen(true);
         }}
         onRefresh={() => void refresh()}
         onLogout={() => void onLogout()}
@@ -251,6 +260,7 @@ export default function App({ onLogout }: { onLogout: () => Promise<void> }) {
         onDelete={deleteAccount}
         onAdd={openAddAccount}
       />
+      <APITokenManager open={tokenManagerOpen} onClose={() => setTokenManagerOpen(false)} />
       <Toasts
         toasts={toasts}
         onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))}

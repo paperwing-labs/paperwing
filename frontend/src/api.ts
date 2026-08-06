@@ -1,4 +1,13 @@
-import type { Account, AuthStatus, Email, EmailPage, NewAccount } from "./types";
+import type {
+  Account,
+  APIToken,
+  APITokenScope,
+  AuthStatus,
+  Email,
+  EmailPage,
+  IssuedAPIToken,
+  NewAccount,
+} from "./types";
 
 interface APIErrorBody {
   error?: { message?: string };
@@ -62,6 +71,20 @@ export const api = {
     }),
 
   logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
+
+  listAPITokens: async () => {
+    const result = await request<{ items: APIToken[] }>("/api-tokens");
+    return result.items;
+  },
+
+  createAPIToken: (name: string, scopes: APITokenScope[], expiresInDays: number) =>
+    request<IssuedAPIToken>("/api-tokens", {
+      method: "POST",
+      body: JSON.stringify({ name, scopes, expires_in_days: expiresInDays }),
+    }),
+
+  revokeAPIToken: (id: string) =>
+    request<void>(`/api-tokens/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   listAccounts: async () => {
     const result = await request<{ items: Account[] }>("/accounts");

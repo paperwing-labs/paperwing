@@ -55,16 +55,32 @@ password over an untrusted plain-HTTP connection.
 
 ## Authentication
 
-All account, email, and attachment endpoints require the `paperwing_session`
-cookie. `/healthz` and the authentication bootstrap endpoints remain public.
-For command-line use, log in and reuse a cookie jar:
+The web app uses the `paperwing_session` HTTP-only cookie. API clients and
+personal assistants should use a revocable API token instead of storing the
+administrator password. Create one from the key icon in the web app, copy it
+when it is shown, and send it as a bearer token:
 
 ```sh
-curl -c paperwing.cookies -X POST http://127.0.0.1:8080/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"your-password"}'
-curl -b paperwing.cookies http://127.0.0.1:8080/accounts
+curl -H "Authorization: Bearer ${PAPERWING_API_TOKEN}" \
+  http://127.0.0.1:8080/accounts
 ```
+
+Store the token in the client's secret manager rather than in source files or
+shell history. The full value is displayed only once. Tokens can be named,
+given an expiration date, inspected by last-use time, and revoked immediately.
+Available scopes are:
+
+| Scope | Allows |
+|---|---|
+| `mail:read` | List and read messages and download attachments |
+| `accounts:read` | List configured mailboxes and monitoring states |
+| `accounts:write` | Test and add mailboxes |
+| `sync:write` | Request an immediate mailbox synchronization |
+
+Browser sessions have full access. API token creation, listing, and revocation
+always require the administrator's browser session and cannot be performed by
+another API token. `/healthz` and the authentication bootstrap endpoints remain
+public.
 
 The first administrator can also be created through `POST /auth/setup`, but
 the web setup screen is recommended. Setup is permanently disabled after the
@@ -77,6 +93,7 @@ enabled. First, test the connection without saving credentials:
 
 ```sh
 curl -X POST http://127.0.0.1:8080/accounts/test \
+  -H "Authorization: Bearer ${PAPERWING_API_TOKEN}" \
   -H 'Content-Type: application/json' \
   -d '{
     "name": "Personal",
@@ -92,6 +109,7 @@ Save the account using the same request body:
 
 ```sh
 curl -X POST http://127.0.0.1:8080/accounts \
+  -H "Authorization: Bearer ${PAPERWING_API_TOKEN}" \
   -H 'Content-Type: application/json' \
   -d '{
     "name": "Personal",
@@ -107,17 +125,17 @@ The response contains an account ID. Watch `monitor_status` until it becomes
 `idle`, then list and read messages:
 
 ```sh
-curl http://127.0.0.1:8080/accounts
-curl 'http://127.0.0.1:8080/emails?page=1&page_size=50'
-curl http://127.0.0.1:8080/emails/EMAIL_ID
-curl -OJ http://127.0.0.1:8080/emails/EMAIL_ID/attachments/ATTACHMENT_ID
+curl -H "Authorization: Bearer ${PAPERWING_API_TOKEN}" http://127.0.0.1:8080/accounts
+curl -H "Authorization: Bearer ${PAPERWING_API_TOKEN}" 'http://127.0.0.1:8080/emails?page=1&page_size=50'
+curl -H "Authorization: Bearer ${PAPERWING_API_TOKEN}" http://127.0.0.1:8080/emails/EMAIL_ID
+curl -OJ -H "Authorization: Bearer ${PAPERWING_API_TOKEN}" http://127.0.0.1:8080/emails/EMAIL_ID/attachments/ATTACHMENT_ID
 ```
 
 Filter by source mailbox or request an immediate catch-up sync:
 
 ```sh
-curl 'http://127.0.0.1:8080/emails?account_id=ACCOUNT_ID'
-curl -X POST http://127.0.0.1:8080/accounts/ACCOUNT_ID/sync
+curl -H "Authorization: Bearer ${PAPERWING_API_TOKEN}" 'http://127.0.0.1:8080/emails?account_id=ACCOUNT_ID'
+curl -X POST -H "Authorization: Bearer ${PAPERWING_API_TOKEN}" http://127.0.0.1:8080/accounts/ACCOUNT_ID/sync
 ```
 
 See [openapi.yaml](./openapi.yaml) for the complete contract.

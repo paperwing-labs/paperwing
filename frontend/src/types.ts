@@ -76,3 +76,23 @@ export interface AuthStatus {
   authenticated: boolean;
   username: string;
 }
+
+export type APITokenScope =
+  | "mail:read"
+  | "accounts:read"
+  | "accounts:write"
+  | "sync:write";
+
+export interface APIToken {
+  id: string;
+  name: string;
+  token_prefix: string;
+  scopes: APITokenScope[];
+  created_at: string;
+  last_used_at?: string;
+  expires_at?: string;
+}
+
+export interface IssuedAPIToken extends APIToken {
+  token: string;
+}

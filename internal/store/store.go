@@ -90,6 +90,20 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS auth_sessions_expires_idx ON auth_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  token_prefix TEXT NOT NULL,
+  token_hash BLOB NOT NULL UNIQUE,
+  scopes_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT,
+  expires_at TEXT NOT NULL,
+  never_expires INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS api_tokens_expires_idx ON api_tokens(expires_at);
 `
 
 func Open(path string, cipher *secure.Cipher) (*Store, error) {
@@ -104,6 +118,10 @@ func Open(path string, cipher *secure.Cipher) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("initialize database: %w", err)
+	}
+	if err := ensureAPITokenNeverExpiresColumn(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate API tokens: %w", err)
 	}
 	return &Store{db: db, cipher: cipher}, nil
 }

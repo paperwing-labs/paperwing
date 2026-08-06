@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paperwing"
+  short_description: "Add inboxes and query Paperwing email"
+  default_prompt: "Use $paperwing to show me the latest messages in my inbox."

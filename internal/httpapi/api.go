@@ -38,7 +38,11 @@ type AuthService interface {
 	Setup(context.Context, string, string) (auth.SessionToken, error)
 	Login(context.Context, string, string) (auth.SessionToken, error)
 	Authenticate(context.Context, string) (bool, error)
+	AuthenticateAPIToken(context.Context, string) (auth.APITokenAccess, bool, error)
 	Logout(context.Context, string) error
+	CreateAPIToken(context.Context, auth.NewAPIToken) (auth.IssuedAPIToken, error)
+	ListAPITokens(context.Context) ([]auth.APIToken, error)
+	RevokeAPIToken(context.Context, string) error
 }
 
 type API struct {
@@ -59,27 +63,18 @@ func New(accounts AccountService, emails EmailRepository, authentication AuthSer
 	mux.HandleFunc("POST /auth/setup", api.setupAuth)
 	mux.HandleFunc("POST /auth/login", api.login)
 	mux.HandleFunc("POST /auth/logout", api.logout)
-	mux.HandleFunc("POST /accounts/test", api.testAccount)
-	mux.HandleFunc("POST /accounts", api.createAccount)
-	mux.HandleFunc("GET /accounts", api.listAccounts)
-	mux.HandleFunc("DELETE /accounts/{id}", api.deleteAccount)
-	mux.HandleFunc("POST /accounts/{id}/sync", api.syncAccount)
-	mux.HandleFunc("GET /emails", api.listEmails)
-	mux.HandleFunc("GET /emails/{id}", api.getEmail)
-	mux.HandleFunc("GET /emails/{id}/attachments/{attachmentId}", api.downloadAttachment)
-	router := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isPublicPath(r.URL.Path) {
-			mux.ServeHTTP(w, r)
-			return
-		}
-		api.requireAuthentication(mux).ServeHTTP(w, r)
-	})
-	return api.logRequests(api.recoverPanic(router))
-}
-
-func isPublicPath(path string) bool {
-	return path == "/healthz" || path == "/auth/status" || path == "/auth/setup" ||
-		path == "/auth/login" || path == "/auth/logout"
+	mux.Handle("GET /api-tokens", api.requireSession(http.HandlerFunc(api.listAPITokens)))
+	mux.Handle("POST /api-tokens", api.requireSession(http.HandlerFunc(api.createAPIToken)))
+	mux.Handle("DELETE /api-tokens/{id}", api.requireSession(http.HandlerFunc(api.revokeAPIToken)))
+	mux.Handle("POST /accounts/test", api.requireScope(auth.ScopeAccountsWrite, http.HandlerFunc(api.testAccount)))
+	mux.Handle("POST /accounts", api.requireScope(auth.ScopeAccountsWrite, http.HandlerFunc(api.createAccount)))
+	mux.Handle("GET /accounts", api.requireScope(auth.ScopeAccountsRead, http.HandlerFunc(api.listAccounts)))
+	mux.Handle("DELETE /accounts/{id}", api.requireSession(http.HandlerFunc(api.deleteAccount)))
+	mux.Handle("POST /accounts/{id}/sync", api.requireScope(auth.ScopeSyncWrite, http.HandlerFunc(api.syncAccount)))
+	mux.Handle("GET /emails", api.requireScope(auth.ScopeMailRead, http.HandlerFunc(api.listEmails)))
+	mux.Handle("GET /emails/{id}", api.requireScope(auth.ScopeMailRead, http.HandlerFunc(api.getEmail)))
+	mux.Handle("GET /emails/{id}/attachments/{attachmentId}", api.requireScope(auth.ScopeMailRead, http.HandlerFunc(api.downloadAttachment)))
+	return api.logRequests(api.recoverPanic(mux))
 }
 
 func (a *API) health(w http.ResponseWriter, _ *http.Request) {
