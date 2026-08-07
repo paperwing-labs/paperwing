@@ -20,7 +20,7 @@ Use the Paperwing HTTP API as a personal mail assistant. Keep the interaction li
 
 1. Use `PAPERWING_URL` and `PAPERWING_API_TOKEN` from the process environment when both are available.
 2. For any missing value, read `${PAPERWING_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/paperwing/config.env}` without printing its contents. Environment values take precedence over saved values.
-3. If the file is absent or incomplete, run `python3 <skill-directory>/scripts/configure.py` in an interactive terminal. Let the script ask for the URL and token, then save them with user-only permissions. If the user has not created a token, direct them to the key icon in the Paperwing web app first. Never ask the user to paste a token into ordinary chat.
+3. If the file is absent or incomplete, run [scripts/configure.py](scripts/configure.py) with Python 3 in an interactive terminal, resolving the path relative to this `SKILL.md`. Let the script ask for the URL and token, then save them with user-only permissions. If the user has not created a token, direct them to the key icon in the Paperwing web app first. Never ask the user to paste a token into ordinary chat.
 4. Remove a trailing slash from the configured base URL. Do not guess a remote address.
 5. Call `GET /healthz`. Expect `200` with `{"status":"ok"}`.
 6. Send the token on every account and email request:
